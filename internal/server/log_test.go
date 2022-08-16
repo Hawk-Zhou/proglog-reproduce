@@ -36,7 +36,7 @@ func marshalAndSubmit(data interface{}, ret interface{}, method string, t *testi
 	}
 }
 
-// only success cases
+// only tests normal inputs, abnormal cases are omitted
 func TestIntegration(t *testing.T) {
 	srv := NewHTTPServer(":8080")
 
