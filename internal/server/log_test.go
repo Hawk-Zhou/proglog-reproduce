@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+// marshals a struct and submit it to sever with given method
+// unmarshal it back to ret (pointer to target struct)
 func marshalAndSubmit(data interface{}, ret interface{}, method string, t *testing.T) {
 	payloadBytes, err := json.Marshal(data)
 	if err != nil {
