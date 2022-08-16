@@ -35,16 +35,21 @@ type ConsumeResponse struct {
 // handleProduce implements httpHandlerFunc
 func (hs *httpServer) handleProduce(w http.ResponseWriter, r *http.Request) {
 	var req ProduceRequest
+
+	// newDecoder is THE solution for io.reader, efficiency, kid
 	err := json.NewDecoder(r.Body).Decode(&req)
+
+	// if can't unmarshal
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if len(req.Record.Value) == 0 {
-		http.Error(w, "record should be non-empty", http.StatusBadRequest)
-		return
-	}
+	// // doesn't allow empty record
+	// if len(req.Record.Value) == 0 {
+	// 	http.Error(w, "record should be non-empty", http.StatusBadRequest)
+	// 	return
+	// }
 
 	offset, err := hs.Log.Append(req.Record)
 	if err != nil {
