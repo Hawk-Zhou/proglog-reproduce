@@ -8,7 +8,7 @@ import (
 )
 
 type Record struct {
-	Value  []byte `json:"value" validate:"required"`
+	Value  []byte `json:"value"`
 	Offset uint64 `json:"offset"`
 }
 
