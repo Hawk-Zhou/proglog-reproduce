@@ -1,55 +1,100 @@
 package server
 
 import (
+	"bytes"
+	"encoding/json"
+	"net/http"
 	"reflect"
-	"strconv"
 	"testing"
+	"time"
 )
 
-func TestLog_Append_Read(t *testing.T) {
+func marshalAndSubmit(data interface{}, ret interface{}, method string, t *testing.T) {
+	payloadBytes, err := json.Marshal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := bytes.NewReader(payloadBytes)
 
-	log := NewLog()
+	req, err := http.NewRequest(method, "http://127.0.0.1:8080", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
 
-	if _, err := log.Read(0); err != ErrOffsetNotFound {
-		t.Error("should get err")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	err = json.NewDecoder(resp.Body).Decode(ret)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// only success cases
+func TestIntegration(t *testing.T) {
+	srv := NewHTTPServer(":8080")
+
+	echan := make(chan error, 1)
+	go func() {
+		err := srv.ListenAndServe()
+		if err != nil {
+			echan <- err
+		}
+	}()
+
+	select {
+	case err := <-echan:
+		t.Fatal(err)
+	case <-time.After(500 * time.Millisecond):
 	}
 
-	records := []Record{
+	produceData := []ProduceRequest{
 		{
-			Value: []byte("1"),
+			Record: Record{
+				Value: []byte("114"),
+			},
 		},
 
 		{
-			Value: []byte("2"),
+			Record: Record{
+				Value: []byte("514"),
+			},
 		},
 	}
 
-	log.Append(records[0])
+	expectedOffsets := []uint64{0, 1}
 
-	log.Append(records[1])
-
-	records[0].Offset = 0
-	records[1].Offset = 1
-
-	for idx, dataRec := range records {
-		t.Run(strconv.Itoa(idx), func(t *testing.T) {
-			rec, err := log.Read(uint64(idx))
-
-			if err != nil {
-				t.Error("unexpected err")
-			}
-
-			if rec.Offset != dataRec.Offset {
-				t.Errorf("wrong Offset expect: %d, got: %d", dataRec.Offset, rec.Offset)
-			}
-
-			if !reflect.DeepEqual(rec.Value, dataRec.Value) {
-				t.Error("wrong Value")
-			}
-		})
+	for idx, d := range produceData {
+		var respStruct ProduceResponse
+		marshalAndSubmit(d, &respStruct, "POST", t)
+		if respStruct.Offset != expectedOffsets[idx] {
+			t.Fatal("wrong return val")
+		}
 	}
 
-	if _, err := log.Read(2); err != ErrOffsetNotFound {
-		t.Error("should get err")
+	consumeData := []ConsumeRequest{
+		{
+			Offset: &expectedOffsets[0],
+		},
+		{
+			Offset: &expectedOffsets[1],
+		},
+	}
+
+	for idx, d := range consumeData {
+		var respStruct ConsumeResponse
+		marshalAndSubmit(d, &respStruct, "GET", t)
+
+		if respStruct.Record.Offset != expectedOffsets[idx] {
+			t.Fatal("wrong return idx")
+		}
+
+		if !reflect.DeepEqual(respStruct.Record.Value, produceData[idx].Record.Value) {
+			t.Fatalf("wrong return val, expect %q, got %q", produceData[idx].Record.Value, respStruct.Record.Value)
+		}
 	}
 }
